@@ -1,0 +1,131 @@
+version: '3.7'
+services:
+  jolokia:
+    image: jolokia/java-jolokia
+    volumes: 
+      - jolokia:/opt/jolokia/
+    
+
+  zookeeper:
+    image: confluentinc/cp-zookeeper:5.3.1
+    hostname: zookeeper
+    environment:
+      ZOOKEEPER_CLIENT_PORT: 2181
+      KAFKA_OPTS: "-javaagent:/opt/jolokia/jolokia.jar=host=0.0.0.0"
+    volumes:
+      - jolokia:/opt/jolokia/
+    healthcheck:
+      test: ["CMD", "bash", "-c", "echo ruok | nc localhost 2181 | grep imok"]
+      start_period: 30s
+
+  kafka-1:
+    image: confluentinc/cp-kafka:5.3.1
+    hostname: kafka-1
+    depends_on:
+      - zookeeper
+    environment:
+      KAFKA_BROKER_ID: 1
+      KAFKA_ZOOKEEPER_CONNECT: zookeeper:2181
+      KAFKA_ADVERTISED_LISTENERS: PLAINTEXT://kafka-1:9092
+      KAFKA_DEFAULT_REPLICATION_FACTOR: 3
+      KAFKA_OPTS: "-javaagent:/opt/jolokia/jolokia.jar=host=0.0.0.0"
+    volumes:
+      - jolokia:/opt/jolokia/
+    healthcheck:
+      test: ["CMD", "nc", "127.0.0.1", "9092"]
+      start_period: 30s
+
+  kafka-2:
+    image: confluentinc/cp-kafka:5.3.1
+    hostname: kafka-2
+    depends_on:
+      - zookeeper
+    environment:
+      KAFKA_BROKER_ID: 2
+      KAFKA_ZOOKEEPER_CONNECT: zookeeper:2181
+      KAFKA_ADVERTISED_LISTENERS: PLAINTEXT://kafka-2:9092
+      KAFKA_DEFAULT_REPLICATION_FACTOR: 3
+      KAFKA_OPTS: "-javaagent:/opt/jolokia/jolokia.jar=host=0.0.0.0"
+    volumes:
+      - jolokia:/opt/jolokia/
+    healthcheck:
+      test: ["CMD", "nc", "127.0.0.1", "9092"]
+      start_period: 30s
+
+  kafka-3:
+    image: confluentinc/cp-kafka:5.3.1
+    hostname: kafka-3
+    depends_on:
+      - zookeeper
+    environment:
+      KAFKA_BROKER_ID: 3
+      KAFKA_ZOOKEEPER_CONNECT: zookeeper:2181
+      KAFKA_ADVERTISED_LISTENERS: PLAINTEXT://kafka-3:9092
+      KAFKA_DEFAULT_REPLICATION_FACTOR: 3
+      KAFKA_OPTS: "-javaagent:/opt/jolokia/jolokia.jar=host=0.0.0.0"
+    volumes:
+      - jolokia:/opt/jolokia/
+    healthcheck:
+      test: ["CMD", "nc", "127.0.0.1", "9092"]
+      start_period: 30s
+
+
+  metricbeat:
+    image: docker.elastic.co/beats/metricbeat:7.4.0
+    hostname: metricbeat
+    user: root
+    volumes:
+      - /proc:/hostfs/proc:ro
+      - /sys/fs/cgroup:/hostfs/sys/fs/cgroup:ro
+      - /:/hostfs:ro
+      - /var/run/docker.sock:/var/run/docker.sock
+      - metricbeat:/usr/share/metricbeat/data
+      - ./config/metricbeat.yml:/usr/share/metricbeat/metricbeat.yml:ro
+    depends_on:
+      - elasticsearch
+      - kibana
+  
+  elasticsearch:
+    image: docker.elastic.co/elasticsearch/elasticsearch:7.4.0
+    container_name: elasticsearch
+    restart: on-failure
+    ports:
+      - "9200:9200"
+      - "9300:9300"
+    environment:
+      - xpack.security.enabled=false
+      - node.name=elasticsearch
+      - discovery.seed_hosts=elasticsearch
+      - cluster.initial_master_nodes=elasticsearch
+      - cluster.name=docker-cluster
+      - bootstrap.memory_lock=true
+      - "ES_JAVA_OPTS=-Xms512m -Xmx512m"
+    ulimits:
+      memlock:
+        soft: -1
+        hard: -1
+    volumes:
+      - esdata:/usr/share/elasticsearch/data
+    ports: 
+      - 9200:9200
+
+
+  kibana:
+    image: docker.elastic.co/kibana/kibana:7.4.0
+    restart: on-failure
+    ports:
+      - "5601:5601"
+    environment:
+      xpack.security.enabled: "false"
+    depends_on:
+      - elasticsearch
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:5601"]
+      start_period: 30s
+
+volumes: 
+  jolokia:
+  metricbeat:
+  esdata:
+
+
